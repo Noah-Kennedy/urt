@@ -1,9 +1,7 @@
 use crate::sys::{Scheduler, Task};
 use crossbeam_channel::{Receiver, Sender};
 use slab::Slab;
-use std::cell::RefCell;
 use std::mem;
-use std::rc::Rc;
 use std::sync::{Arc, Mutex, Weak};
 use std::task::{Context, Wake, Waker};
 
@@ -14,7 +12,7 @@ pub(crate) struct Worker {
     spawner: Spawner,
 }
 
-pub(crate) struct SysWaker {
+struct SysWaker {
     key: usize,
     scheduler: Weak<Mutex<Scheduler>>,
 }
@@ -26,7 +24,7 @@ enum Tick {
 }
 
 #[derive(Clone)]
-struct Spawner {
+pub(crate) struct Spawner {
     sender: Sender<Task>,
 }
 
@@ -117,6 +115,12 @@ impl Worker {
         let uwaker = SysWaker { key, scheduler };
 
         Waker::from(Arc::new(uwaker))
+    }
+}
+
+impl Spawner {
+    pub(crate) fn spawn(&self, t: Task) {
+        let _ = self.sender.send(t);
     }
 }
 
