@@ -1,11 +1,11 @@
 use crate::sys::{Driver, Scheduler, Task};
 use crossbeam_channel::{Receiver, Sender};
 use slab::Slab;
+use std::cell::RefCell;
+use std::rc::Rc;
 use std::sync::{Arc, Mutex, Weak};
 use std::task::{Context, Wake, Waker};
 use std::{io, mem};
-use std::cell::RefCell;
-use std::rc::Rc;
 
 pub(crate) struct Worker {
     tasks: Slab<Task>,
@@ -32,7 +32,7 @@ pub(crate) struct Spawner {
 }
 
 impl Worker {
-    pub(crate) fn new() -> io::Result<Self> {
+    pub(crate) fn new(driver: Rc<RefCell<Driver>>) -> Self {
         let tasks = Slab::new();
         let scheduler = Arc::new(Mutex::new(Scheduler::new()));
 
@@ -40,15 +40,17 @@ impl Worker {
 
         let spawner = Spawner { sender };
 
-        let driver = Rc::new(RefCell::new(Driver::new(4096)?));
-
-        Ok(Self {
+        Self {
             tasks,
             scheduler,
             new_tasks,
             spawner,
             driver,
-        })
+        }
+    }
+
+    pub(crate) fn driver(&self) -> Rc<RefCell<Driver>> {
+        self.driver.clone()
     }
 
     pub(crate) fn spawner(&self) -> Spawner {

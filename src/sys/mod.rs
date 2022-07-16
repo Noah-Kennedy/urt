@@ -12,11 +12,11 @@ mod rt;
 
 mod driver;
 
-thread_local!(pub(crate) static CONTEXT: Option<ThreadContext> = None);
+thread_local!(pub(crate) static CONTEXT: RefCell<Option<ThreadContext>> = RefCell::new(None));
 
 pub(crate) struct ThreadContext {
-    spawner: Spawner,
-    driver: Rc<RefCell<Driver>>,
+    pub(crate) spawner: Spawner,
+    pub(crate) driver: Rc<RefCell<Driver>>,
 }
 
 pub fn spawn<T, F>(fut: F) -> JoinHandle<T>
@@ -25,7 +25,8 @@ where
     T: Send + 'static + Sync,
 {
     CONTEXT.with(|maybe| {
-        let context = maybe.as_ref().unwrap();
+        let borrow = maybe.borrow();
+        let context = borrow.as_ref().unwrap();
 
         let (task, handle) = Task::new(fut);
 
@@ -40,9 +41,12 @@ where
     T: 'static,
 {
     CONTEXT.with(|maybe| {
-        let context = maybe.as_ref().unwrap();
+        let borrow = maybe.borrow();
+        let context = borrow.as_ref().unwrap();
 
-        context.driver.borrow_mut().push(entry, data)
+        let x = context.driver.borrow_mut().push(entry, data);
+
+        x
     })
 }
 
