@@ -1,5 +1,5 @@
 use crate::sys::{Driver, Task, ThreadContext, Worker, CONTEXT};
-pub use crate::task::JoinHandle;
+use crate::task::JoinHandle;
 use std::cell::RefCell;
 use std::future::Future;
 use std::io;
