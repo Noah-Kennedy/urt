@@ -1,15 +1,18 @@
-use crate::sys::{Scheduler, Task};
+use crate::sys::{Driver, Scheduler, Task};
 use crossbeam_channel::{Receiver, Sender};
 use slab::Slab;
-use std::mem;
 use std::sync::{Arc, Mutex, Weak};
 use std::task::{Context, Wake, Waker};
+use std::{io, mem};
+use std::cell::RefCell;
+use std::rc::Rc;
 
 pub(crate) struct Worker {
     tasks: Slab<Task>,
     scheduler: Arc<Mutex<Scheduler>>,
     new_tasks: Receiver<Task>,
     spawner: Spawner,
+    driver: Rc<RefCell<Driver>>,
 }
 
 struct SysWaker {
@@ -29,7 +32,7 @@ pub(crate) struct Spawner {
 }
 
 impl Worker {
-    pub(crate) fn new() -> Self {
+    pub(crate) fn new() -> io::Result<Self> {
         let tasks = Slab::new();
         let scheduler = Arc::new(Mutex::new(Scheduler::new()));
 
@@ -37,45 +40,48 @@ impl Worker {
 
         let spawner = Spawner { sender };
 
-        Self {
+        let driver = Rc::new(RefCell::new(Driver::new(4096)?));
+
+        Ok(Self {
             tasks,
             scheduler,
             new_tasks,
             spawner,
-        }
+            driver,
+        })
     }
 
     pub(crate) fn spawner(&self) -> Spawner {
         self.spawner.clone()
     }
 
-    pub(crate) fn run(&mut self) {
+    pub(crate) fn run(&mut self) -> io::Result<()> {
         let mut polled_counter = 0u64;
 
         loop {
-            if polled_counter == 127 {
+            if polled_counter == 16 {
                 polled_counter = 0;
-                self.drive();
+                self.poll()?;
             }
 
             match self.tick() {
                 Tick::Poll => {
                     polled_counter += 1;
                 }
-                Tick::QueueEmpty => self.park(),
+                Tick::QueueEmpty => self.park()?,
                 Tick::TasksEmpty => {
-                    return;
+                    return Ok(());
                 }
             }
         }
     }
 
-    fn drive(&mut self) {
-        todo!()
+    fn poll(&mut self) -> io::Result<()> {
+        self.driver.borrow_mut().poll()
     }
 
-    fn park(&mut self) {
-        todo!()
+    fn park(&mut self) -> io::Result<()> {
+        self.driver.borrow_mut().park()
     }
 
     fn tick(&mut self) -> Tick {

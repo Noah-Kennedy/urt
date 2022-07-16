@@ -21,6 +21,14 @@ pub(crate) struct Driver {
 }
 
 impl Driver {
+    pub(crate) fn new(entries: u32) -> io::Result<Self> {
+        let slab = Rc::new(RefCell::new(Slab::new()));
+
+        let uring = IoUring::new(entries)?;
+
+        Ok(Self { slab, uring })
+    }
+
     pub(crate) unsafe fn push<T>(&mut self, entry: squeue::Entry, data: T) -> io::Result<Op<T>>
     where
         T: 'static,
