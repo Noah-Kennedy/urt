@@ -12,6 +12,7 @@ pub struct TcpListener {
     inner: std::net::TcpListener,
 }
 
+#[derive(Debug)]
 pub struct TcpStream {
     inner: std::net::TcpStream,
 }
@@ -131,7 +132,7 @@ impl TcpStream {
             if len != -1 {
                 Ok((len as usize, buf))
             } else {
-                Err(io::Error::last_os_error())
+                Err(io::Error::from_raw_os_error(len))
             }
         };
 
@@ -157,7 +158,7 @@ impl TcpStream {
             if len != -1 {
                 Ok((len as usize, buf))
             } else {
-                Err(io::Error::last_os_error())
+                Err(io::Error::from_raw_os_error(len))
             }
         };
 

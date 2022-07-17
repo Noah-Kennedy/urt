@@ -13,12 +13,12 @@ pub fn prepare_batch(size: usize) -> io::Result<()> {
         let outer_guard = x.borrow();
         let cx = outer_guard.as_ref().unwrap();
 
-        let driver = cx.driver.borrow_mut();
+        let mut driver = cx.driver.borrow_mut();
 
-        let len = cx.driver.borrow().get_remaining();
+        let len = driver.get_remaining();
 
         if len < size {
-            cx.driver.borrow_mut().poll()?;
+            driver.poll()?;
         }
 
         Ok(())

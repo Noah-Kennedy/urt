@@ -1,4 +1,6 @@
+use io_uring::squeue::Flags;
 use tokio::io;
+use urt::io::prepare_batch;
 use urt::net::{TcpListener, TcpStream};
 use urt::rt::Runtime;
 
@@ -24,14 +26,27 @@ async fn handle_connection(mut stream: TcpStream) -> io::Result<()> {
     let mut buf = vec![0; 4096];
 
     loop {
-        let (n, r_buf) = unsafe { stream.read_owned(buf).submit()? }.await?;
-        buf = r_buf;
+        unsafe {
+            prepare_batch(2)?;
 
-        if n == 0 {
-            break;
+            let mut rx_op = stream.read_owned(buf);
+            let tx_op = stream.write_owned(RESPONSE);
+
+            rx_op.apply_flags(Flags::IO_HARDLINK);
+
+            let rx_in_flight = rx_op.submit()?;
+            let tx_in_flight = tx_op.submit()?;
+
+            let (n, r_buf) = rx_in_flight.await?;
+
+            let _ = tx_in_flight.await?;
+
+            buf = r_buf;
+
+            if n == 0 {
+                break;
+            }
         }
-
-        unsafe { stream.write_owned(RESPONSE).submit()? }.await?;
     }
 
     Ok(())
