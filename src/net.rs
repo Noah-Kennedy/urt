@@ -111,7 +111,7 @@ impl TcpStream {
     }
 
     // todo this is unsound
-    pub async fn read_owned<T: AsMut<[u8]> + 'static + Unpin>(
+    pub async unsafe fn read_owned<T: AsMut<[u8]> + 'static + Unpin>(
         &mut self,
         mut buf: T,
     ) -> io::Result<(usize, T)> {
@@ -125,7 +125,7 @@ impl TcpStream {
             io_uring::opcode::Read::new(fd, buf.as_mut().as_mut_ptr(), buf.as_mut().len() as _)
                 .build();
 
-        let (entry, buf) = unsafe { submit_op(entry, buf) }?.await;
+        let (entry, buf) = submit_op(entry, buf)?.await;
 
         let len = entry.result();
 
@@ -137,7 +137,7 @@ impl TcpStream {
     }
 
     // todo this is unsound
-    pub async fn write_owned<T: AsRef<[u8]> + 'static + Unpin>(
+    pub async unsafe fn write_owned<T: AsRef<[u8]> + 'static + Unpin>(
         &mut self,
         buf: T,
     ) -> io::Result<(usize, T)> {
@@ -151,7 +151,7 @@ impl TcpStream {
             io_uring::opcode::Write::new(fd, buf.as_ref().as_ptr(), buf.as_ref().len() as _)
                 .build();
 
-        let (entry, buf) = unsafe { submit_op(entry, buf) }?.await;
+        let (entry, buf) = submit_op(entry, buf)?.await;
 
         let len = entry.result();
 
@@ -214,11 +214,11 @@ mod tests {
 
             let buf = vec![0; 64];
 
-            let (len, buf) = stream.read_owned(buf).await.unwrap();
+            let (len, buf) = unsafe { stream.read_owned(buf).await.unwrap() };
 
             assert_eq!(b"hello", &buf[..len]);
 
-            stream.write_owned(b"world").await.unwrap();
+            unsafe { stream.write_owned(b"world").await.unwrap() };
         });
 
         runtime.spawn(async {
@@ -226,11 +226,11 @@ mod tests {
                 .await
                 .unwrap();
 
-            stream.write_owned(b"hello").await.unwrap();
+            unsafe { stream.write_owned(b"hello") }.await.unwrap();
 
             let buf = vec![0; 64];
 
-            let (len, buf) = stream.read_owned(buf).await.unwrap();
+            let (len, buf) = unsafe { stream.read_owned(buf).await.unwrap() };
 
             assert_eq!(b"world", &buf[..len]);
         });
