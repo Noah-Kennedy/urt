@@ -1,4 +1,5 @@
-use std::collections::{HashSet, LinkedList};
+use hashbrown::HashSet;
+use std::collections::LinkedList;
 
 pub(crate) struct Scheduler {
     queue: LinkedList<usize>,

@@ -1,9 +1,10 @@
 use crate::sys::{Driver, Scheduler, Task};
 use crossbeam_channel::{Receiver, Sender};
+use parking_lot::Mutex;
 use slab::Slab;
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::sync::{Arc, Mutex, Weak};
+use std::sync::{Arc, Weak};
 use std::task::{Context, Wake, Waker};
 use std::{io, mem};
 
@@ -87,7 +88,7 @@ impl Worker {
     }
 
     fn tick(&mut self) -> Tick {
-        let mut guard = self.scheduler.lock().unwrap();
+        let mut guard = self.scheduler.lock();
 
         // intake new tasks if present
         if let Ok(t) = self.new_tasks.try_recv() {
@@ -137,7 +138,7 @@ impl Spawner {
 impl Wake for SysWaker {
     fn wake(self: Arc<Self>) {
         if let Some(unlocked) = self.scheduler.upgrade() {
-            let mut guard = unlocked.lock().unwrap();
+            let mut guard = unlocked.lock();
 
             guard.wake(self.key);
         }
