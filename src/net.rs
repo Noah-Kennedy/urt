@@ -40,7 +40,7 @@ impl TcpListener {
 
             Ok(TcpStream { inner })
         } else {
-            Err(io::Error::last_os_error())
+            Err(io::Error::from_raw_os_error(fd))
         }
     }
 }
