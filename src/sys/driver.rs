@@ -29,6 +29,7 @@ impl Driver {
         Ok(Self { slab, uring })
     }
 
+    #[inline]
     pub(crate) unsafe fn push<T>(&mut self, entry: squeue::Entry, data: T) -> io::Result<Op<T>>
     where
         T: 'static,
@@ -138,7 +139,9 @@ where
                 None
             }
             Lifetime::Waiting(waker) => {
-                let _ = mem::replace(waker, cx.waker().clone());
+                if !cx.waker().will_wake(waker) {
+                    let _ = mem::replace(waker, cx.waker().clone());
+                }
 
                 None
             }

@@ -79,6 +79,7 @@ impl Worker {
         }
     }
 
+    #[inline]
     fn poll(&mut self) -> io::Result<()> {
         self.driver.borrow_mut().poll()
     }

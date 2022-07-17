@@ -11,7 +11,7 @@ tokio = { version = "1.18.2", features = ["sync"] }
 crossbeam-channel = "0.5.5"
 libc = "0.2.126"
 parking_lot = "0.12.1"
-hashbrown = "0.12.2"
+bit-set = "0.5.2"
 
 [profile.release]
 debug = true
