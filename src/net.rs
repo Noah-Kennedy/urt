@@ -81,6 +81,7 @@ impl TcpStream {
         }
     }
 
+    // todo this is unsound
     pub async fn read_owned<T: AsMut<[u8]> + 'static + Unpin>(
         &mut self,
         mut buf: T,
@@ -106,6 +107,7 @@ impl TcpStream {
         }
     }
 
+    // todo this is unsound
     pub async fn write_owned<T: AsRef<[u8]> + 'static + Unpin>(
         &mut self,
         buf: T,
