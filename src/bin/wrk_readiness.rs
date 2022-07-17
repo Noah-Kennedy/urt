@@ -8,7 +8,7 @@ fn main() {
     let mut runtime = Runtime::new(256).unwrap();
 
     runtime.spawn(async {
-        let listener = TcpListener::bind("[::1]:3000".parse().unwrap()).unwrap();
+        let listener = TcpListener::bind("[::1]:9000".parse().unwrap()).unwrap();
 
         loop {
             let stream = listener.accept().await.unwrap();
