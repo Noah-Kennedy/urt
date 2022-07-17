@@ -24,14 +24,14 @@ async fn handle_connection(mut stream: TcpStream) -> io::Result<()> {
     let mut buf = vec![0; 4096];
 
     loop {
-        let (n, r_buf) = unsafe { stream.read_owned(buf) }.await?;
+        let (n, r_buf) = unsafe { stream.read_owned(buf).submit()? }.await?;
         buf = r_buf;
 
         if n == 0 {
             break;
         }
 
-        unsafe { stream.write_owned(RESPONSE) }.await?;
+        unsafe { stream.write_owned(RESPONSE).submit()? }.await?;
     }
 
     Ok(())

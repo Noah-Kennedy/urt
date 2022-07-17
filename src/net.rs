@@ -1,4 +1,6 @@
+use crate::io::Unsubmitted;
 use crate::submit_op;
+use io_uring::cqueue;
 use socket2::{Domain, Protocol, SockAddr, Type};
 use std::io;
 use std::io::{Read, Write};
@@ -111,13 +113,11 @@ impl TcpStream {
     }
 
     // todo this is unsound
-    pub async unsafe fn read_owned<T: AsMut<[u8]> + 'static + Unpin>(
+    pub unsafe fn read_owned<T: AsMut<[u8]> + 'static + Unpin>(
         &mut self,
         mut buf: T,
-    ) -> io::Result<(usize, T)> {
-        if buf.as_mut().is_empty() {
-            return Ok((0, buf));
-        }
+    ) -> Unsubmitted<T, (usize, T), impl FnOnce(cqueue::Entry, T) -> io::Result<(usize, T)>> {
+        assert!(!buf.as_mut().is_empty());
 
         let fd = io_uring::types::Fd(self.inner.as_raw_fd());
 
@@ -125,25 +125,25 @@ impl TcpStream {
             io_uring::opcode::Read::new(fd, buf.as_mut().as_mut_ptr(), buf.as_mut().len() as _)
                 .build();
 
-        let (entry, buf) = submit_op(entry, buf)?.await;
+        let post_op = |entry: cqueue::Entry, buf| {
+            let len = entry.result();
 
-        let len = entry.result();
+            if len != -1 {
+                Ok((len as usize, buf))
+            } else {
+                Err(io::Error::last_os_error())
+            }
+        };
 
-        if len != -1 {
-            Ok((len as usize, buf))
-        } else {
-            Err(io::Error::last_os_error())
-        }
+        Unsubmitted::from_raw(entry, buf, post_op)
     }
 
     // todo this is unsound
-    pub async unsafe fn write_owned<T: AsRef<[u8]> + 'static + Unpin>(
+    pub unsafe fn write_owned<T: AsRef<[u8]> + 'static + Unpin>(
         &mut self,
         buf: T,
-    ) -> io::Result<(usize, T)> {
-        if buf.as_ref().is_empty() {
-            return Ok((0, buf));
-        }
+    ) -> Unsubmitted<T, (usize, T), impl FnOnce(cqueue::Entry, T) -> io::Result<(usize, T)>> {
+        assert!(!buf.as_ref().is_empty());
 
         let fd = io_uring::types::Fd(self.inner.as_raw_fd());
 
@@ -151,15 +151,17 @@ impl TcpStream {
             io_uring::opcode::Write::new(fd, buf.as_ref().as_ptr(), buf.as_ref().len() as _)
                 .build();
 
-        let (entry, buf) = submit_op(entry, buf)?.await;
+        let post_op = |entry: cqueue::Entry, buf| {
+            let len = entry.result();
 
-        let len = entry.result();
+            if len != -1 {
+                Ok((len as usize, buf))
+            } else {
+                Err(io::Error::last_os_error())
+            }
+        };
 
-        if len != -1 {
-            Ok((len as usize, buf))
-        } else {
-            Err(io::Error::last_os_error())
-        }
+        Unsubmitted::from_raw(entry, buf, post_op)
     }
 }
 
@@ -214,11 +216,18 @@ mod tests {
 
             let buf = vec![0; 64];
 
-            let (len, buf) = unsafe { stream.read_owned(buf).await.unwrap() };
+            let (len, buf) = unsafe { stream.read_owned(buf).submit().unwrap().await.unwrap() };
 
             assert_eq!(b"hello", &buf[..len]);
 
-            unsafe { stream.write_owned(b"world").await.unwrap() };
+            unsafe {
+                stream
+                    .write_owned(b"world")
+                    .submit()
+                    .unwrap()
+                    .await
+                    .unwrap()
+            };
         });
 
         runtime.spawn(async {
@@ -226,11 +235,15 @@ mod tests {
                 .await
                 .unwrap();
 
-            unsafe { stream.write_owned(b"hello") }.await.unwrap();
+            unsafe { stream.write_owned(b"hello") }
+                .submit()
+                .unwrap()
+                .await
+                .unwrap();
 
             let buf = vec![0; 64];
 
-            let (len, buf) = unsafe { stream.read_owned(buf).await.unwrap() };
+            let (len, buf) = unsafe { stream.read_owned(buf).submit().unwrap().await.unwrap() };
 
             assert_eq!(b"world", &buf[..len]);
         });
