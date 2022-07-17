@@ -61,7 +61,7 @@ impl Worker {
         let mut polled_counter = 0u64;
 
         loop {
-            if polled_counter == 16 {
+            if polled_counter == 128 {
                 polled_counter = 0;
                 self.poll()?;
             }

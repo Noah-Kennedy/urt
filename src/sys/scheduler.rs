@@ -32,7 +32,7 @@ impl Scheduler {
 
     pub(crate) fn fetch_next_task_for_tick(&mut self) -> Option<usize> {
         if let Some(key) = self.queue.pop_front() {
-            debug_assert!(
+            assert!(
                 self.in_queue.remove(&key),
                 "Internal error: in_queue set did not contain removed key {key}",
             );

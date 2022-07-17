@@ -65,18 +65,24 @@ impl Driver {
     }
 
     pub(crate) fn park(&mut self) -> io::Result<()> {
-        self.uring.submit_and_wait(1)?;
+        if !self.complete() {
+            self.uring.submit_and_wait(1)?;
 
-        self.complete();
+            self.complete();
+        } else {
+            self.uring.submit()?;
+        }
 
         Ok(())
     }
 
-    pub(crate) fn complete(&mut self) {
+    pub(crate) fn complete(&mut self) -> bool {
         let mut completions = self.uring.completion();
         let mut slab = self.slab.borrow_mut();
 
         completions.sync();
+
+        let res = !completions.is_empty();
 
         for c in completions {
             let key = c.user_data() as usize;
@@ -96,6 +102,8 @@ impl Driver {
                 }
             }
         }
+
+        res
     }
 }
 
