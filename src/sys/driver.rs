@@ -24,7 +24,7 @@ impl Driver {
     pub(crate) fn new(entries: u32) -> io::Result<Self> {
         let slab = Rc::new(RefCell::new(Slab::new()));
 
-        let uring = IoUring::new(entries)?;
+        let uring = io_uring::Builder::default().dontfork().build(entries)?;
 
         Ok(Self { slab, uring })
     }
@@ -42,10 +42,8 @@ impl Driver {
 
         let entry = entry.user_data(key as _);
 
-        if self.uring.submission().push(&entry).is_err() {
+        while self.uring.submission().push(&entry).is_err() {
             self.uring.submit()?;
-
-            self.uring.submission().push(&entry).unwrap();
         }
 
         vacant.insert(Lifetime::Submitted);

@@ -1,3 +1,5 @@
+use futures::stream::FuturesUnordered;
+use futures::StreamExt;
 use io_uring::squeue::Flags;
 use tokio::io;
 use urt::io::prepare_batch;
@@ -12,8 +14,16 @@ fn main() {
     runtime.spawn(async {
         let listener = TcpListener::bind("[::1]:9000".parse().unwrap()).unwrap();
 
+        let mut unordered = FuturesUnordered::new();
+
+        for _ in 0..64 {
+            unordered.push(listener.accept())
+        }
+
         loop {
-            let stream = listener.accept().await.unwrap();
+            let stream = unordered.next().await.unwrap().unwrap();
+
+            unordered.push(listener.accept());
 
             urt::spawn(handle_connection(stream));
         }
@@ -38,7 +48,6 @@ async fn handle_connection(mut stream: TcpStream) -> io::Result<()> {
             let tx_in_flight = tx_op.submit()?;
 
             let (n, r_buf) = rx_in_flight.await?;
-
             let _ = tx_in_flight.await?;
 
             buf = r_buf;

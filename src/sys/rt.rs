@@ -92,9 +92,13 @@ impl Worker {
         let mut guard = self.scheduler.lock();
 
         // intake new tasks if present
-        if let Ok(t) = self.new_tasks.try_recv() {
-            let key = self.tasks.insert(t);
-            guard.spawn(key);
+        for _ in 0..64 {
+            if let Ok(t) = self.new_tasks.try_recv() {
+                let key = self.tasks.insert(t);
+                guard.spawn(key);
+            } else {
+                break;
+            }
         }
 
         // try and poll a task if available
