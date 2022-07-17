@@ -80,6 +80,56 @@ impl TcpStream {
             }
         }
     }
+
+    pub async fn read_owned<T: AsMut<[u8]> + 'static + Unpin>(
+        &mut self,
+        mut buf: T,
+    ) -> io::Result<(usize, T)> {
+        if buf.as_mut().is_empty() {
+            return Ok((0, buf));
+        }
+
+        let fd = io_uring::types::Fd(self.inner.as_raw_fd());
+
+        let entry =
+            io_uring::opcode::Read::new(fd, buf.as_mut().as_mut_ptr(), buf.as_mut().len() as _)
+                .build();
+
+        let (entry, buf) = unsafe { submit_op(entry, buf) }?.await;
+
+        let len = entry.result();
+
+        if len != -1 {
+            Ok((len as usize, buf))
+        } else {
+            Err(io::Error::last_os_error())
+        }
+    }
+
+    pub async fn write_owned<T: AsRef<[u8]> + 'static + Unpin>(
+        &mut self,
+        buf: T,
+    ) -> io::Result<(usize, T)> {
+        if buf.as_ref().is_empty() {
+            return Ok((0, buf));
+        }
+
+        let fd = io_uring::types::Fd(self.inner.as_raw_fd());
+
+        let entry =
+            io_uring::opcode::Write::new(fd, buf.as_ref().as_ptr(), buf.as_ref().len() as _)
+                .build();
+
+        let (entry, buf) = unsafe { submit_op(entry, buf) }?.await;
+
+        let len = entry.result();
+
+        if len != -1 {
+            Ok((len as usize, buf))
+        } else {
+            Err(io::Error::last_os_error())
+        }
+    }
 }
 
 #[cfg(test)]
@@ -88,7 +138,7 @@ mod tests {
     use crate::rt::Runtime;
 
     #[test]
-    fn test_tcp_read() {
+    fn test_tcp_readiness() {
         let mut runtime = Runtime::new(256).unwrap();
 
         runtime.spawn(async {
@@ -113,6 +163,39 @@ mod tests {
             let mut buf = [0; 64];
 
             let len = stream.read(&mut buf).await.unwrap();
+
+            assert_eq!(b"world", &buf[..len]);
+        });
+
+        runtime.run().unwrap();
+    }
+
+    #[test]
+    fn test_tcp_owned() {
+        let mut runtime = Runtime::new(256).unwrap();
+
+        runtime.spawn(async {
+            let listener = TcpListener::bind("127.0.0.1:9000".parse().unwrap()).unwrap();
+
+            let mut stream = listener.accept().await.unwrap();
+
+            let buf = vec![0; 64];
+
+            let (len, buf) = stream.read_owned(buf).await.unwrap();
+
+            assert_eq!(b"hello", &buf[..len]);
+
+            stream.write_owned(b"world").await.unwrap();
+        });
+
+        runtime.spawn(async {
+            let mut stream = TcpStream::connect("127.0.0.1:9000".parse().unwrap()).unwrap();
+
+            stream.write_owned(b"hello").await.unwrap();
+
+            let buf = vec![0; 64];
+
+            let (len, buf) = stream.read_owned(buf).await.unwrap();
 
             assert_eq!(b"world", &buf[..len]);
         });
