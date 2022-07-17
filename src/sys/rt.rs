@@ -104,7 +104,9 @@ impl Worker {
 
                 let mut cx = Context::from_waker(&waker);
 
-                task.poll_task(&mut cx);
+                if task.poll_task(&mut cx) {
+                    self.tasks.remove(key);
+                }
 
                 return Tick::Poll;
             }

@@ -30,11 +30,11 @@ impl Task {
         (task, handle)
     }
 
-    pub(crate) fn poll_task(&mut self, cx: &mut Context<'_>) {
+    pub(crate) fn poll_task(&mut self, cx: &mut Context<'_>) -> bool {
         let pinned = self.inner.as_mut();
 
         pin_mut!(pinned);
 
-        let _ = pinned.poll(cx);
+        pinned.poll(cx).is_ready()
     }
 }

@@ -28,7 +28,7 @@ impl Runtime {
         handle
     }
 
-    pub fn run<T, F>(&mut self) -> io::Result<()> {
+    pub fn run(&mut self) -> io::Result<()> {
         // exit context when this finishes
         struct ContextGuard {}
 

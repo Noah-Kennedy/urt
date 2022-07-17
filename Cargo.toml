@@ -9,3 +9,4 @@ slab = "0.4.6"
 io-uring = "0.5.2"
 tokio = { version = "1.18.2", features = ["sync"] }
 crossbeam-channel = "0.5.5"
+libc = "0.2.126"
