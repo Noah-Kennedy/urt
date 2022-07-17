@@ -57,6 +57,39 @@ impl Driver {
         })
     }
 
+    #[inline]
+    pub(crate) fn get_remaining(&self) -> usize {
+        unsafe { self.uring.submission_shared().capacity() - self.uring.submission_shared().len() }
+    }
+
+    #[inline]
+    pub(crate) unsafe fn try_push<T>(&mut self, entry: squeue::Entry, data: T) -> Option<Op<T>>
+    where
+        T: 'static,
+    {
+        if self.get_remaining() != 0 {
+            let mut guard = self.slab.borrow_mut();
+
+            let vacant = guard.vacant_entry();
+
+            let key = vacant.key();
+
+            let entry = entry.user_data(key as _);
+
+            self.uring.submission().push(&entry).unwrap();
+
+            vacant.insert(Lifetime::Submitted);
+
+            Some(Op {
+                slab: self.slab.clone(),
+                data: Some(data),
+                key,
+            })
+        } else {
+            None
+        }
+    }
+
     pub(crate) fn poll(&mut self) -> io::Result<()> {
         self.uring.submit()?;
 

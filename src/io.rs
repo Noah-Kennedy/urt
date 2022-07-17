@@ -1,5 +1,5 @@
 use crate::submit_op;
-use crate::sys::Op;
+use crate::sys::{Op, CONTEXT};
 use futures::{pin_mut, ready};
 use io_uring::squeue::Flags;
 use io_uring::{cqueue, squeue};
@@ -7,6 +7,23 @@ use std::future::Future;
 use std::io;
 use std::pin::Pin;
 use std::task::{Context, Poll};
+
+pub fn prepare_batch(size: usize) -> io::Result<()> {
+    CONTEXT.with(|x| {
+        let outer_guard = x.borrow();
+        let cx = outer_guard.as_ref().unwrap();
+
+        let driver = cx.driver.borrow_mut();
+
+        let len = cx.driver.borrow().get_remaining();
+
+        if len < size {
+            cx.driver.borrow_mut().poll()?;
+        }
+
+        Ok(())
+    })
+}
 
 pub struct Unsubmitted<D, O, F>
 where
