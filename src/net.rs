@@ -1,8 +1,9 @@
 use crate::submit_op;
+use socket2::{Domain, Protocol, SockAddr, Type};
 use std::io;
 use std::io::{Read, Write};
 use std::net::SocketAddr;
-use std::os::unix::io::{AsRawFd, FromRawFd};
+use std::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd};
 use std::ptr::null_mut;
 
 pub struct TcpListener {
@@ -19,6 +20,7 @@ impl TcpListener {
             inner: std::net::TcpListener::bind(addr)?,
         })
     }
+
     pub async fn accept(&self) -> io::Result<TcpStream> {
         let fd = io_uring::types::Fd(self.inner.as_raw_fd());
         let entry = io_uring::opcode::Accept::new(fd, null_mut(), null_mut()).build();
@@ -41,13 +43,39 @@ impl TcpListener {
 }
 
 impl TcpStream {
-    // todo make nonblocking
-    pub fn connect(addr: SocketAddr) -> io::Result<Self> {
-        let inner = std::net::TcpStream::connect(addr)?;
-        inner.set_nonblocking(true)?;
+    pub async fn connect(addr: SocketAddr) -> io::Result<Self> {
+        let socket = socket2::Socket::new(
+            if addr.is_ipv4() {
+                Domain::IPV4
+            } else {
+                Domain::IPV6
+            },
+            Type::STREAM,
+            Some(Protocol::TCP),
+        )?;
 
-        Ok(Self { inner })
+        let fd = io_uring::types::Fd(socket.as_raw_fd());
+
+        let sock: Box<SockAddr> = Box::new(addr.into());
+
+        let entry = io_uring::opcode::Connect::new(fd, sock.as_ptr(), sock.len()).build();
+
+        let (entry, _) = unsafe { submit_op(entry, sock) }?.await;
+
+        let ret = entry.result();
+
+        if ret != -1 {
+            let inner = unsafe { std::net::TcpStream::from_raw_fd(socket.into_raw_fd()) };
+
+            // needed for readiness io
+            inner.set_nonblocking(true)?;
+
+            Ok(TcpStream { inner })
+        } else {
+            Err(io::Error::last_os_error())
+        }
     }
+
     pub async fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         loop {
             match self.inner.read(buf) {
@@ -64,6 +92,7 @@ impl TcpStream {
             }
         }
     }
+
     pub async fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         loop {
             match self.inner.write(buf) {
@@ -158,7 +187,9 @@ mod tests {
         });
 
         runtime.spawn(async {
-            let mut stream = TcpStream::connect("127.0.0.1:8080".parse().unwrap()).unwrap();
+            let mut stream = TcpStream::connect("127.0.0.1:8080".parse().unwrap())
+                .await
+                .unwrap();
 
             stream.write(b"hello").await.unwrap();
 
@@ -191,7 +222,9 @@ mod tests {
         });
 
         runtime.spawn(async {
-            let mut stream = TcpStream::connect("127.0.0.1:9000".parse().unwrap()).unwrap();
+            let mut stream = TcpStream::connect("127.0.0.1:9000".parse().unwrap())
+                .await
+                .unwrap();
 
             stream.write_owned(b"hello").await.unwrap();
 

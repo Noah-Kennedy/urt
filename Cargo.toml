@@ -12,6 +12,7 @@ crossbeam-channel = "0.5.5"
 libc = "0.2.126"
 parking_lot = "0.12.1"
 bit-set = "0.5.2"
+socket2 = "0.4.4"
 
 [profile.release]
 debug = true
