@@ -22,7 +22,7 @@ pub(crate) struct Driver {
 
 impl Driver {
     pub(crate) fn new(entries: u32) -> io::Result<Self> {
-        let slab = Rc::new(RefCell::new(Slab::new()));
+        let slab = Rc::new(RefCell::new(Slab::with_capacity(4096)));
 
         let uring = io_uring::Builder::default().dontfork().build(entries)?;
 

@@ -29,7 +29,7 @@ pub(crate) struct Spawner {
 
 impl Worker {
     pub(crate) fn new(driver: Rc<RefCell<Driver>>) -> Self {
-        let tasks = Slab::new();
+        let tasks = Slab::with_capacity(4096);
         let scheduler = Rc::new(RefCell::new(Scheduler::new()));
 
         let spawner = Spawner {
