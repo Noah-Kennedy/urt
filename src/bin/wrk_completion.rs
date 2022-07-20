@@ -1,3 +1,4 @@
+use std::thread;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 use io_uring::squeue::Flags;
@@ -6,13 +7,26 @@ use urt::io::prepare_batch;
 use urt::net::{TcpListener, TcpStream};
 use urt::rt::Runtime;
 
+const NUM_THREADS: usize = 1;
 const RESPONSE: &[u8] = b"HTTP/1.1 200 OK\r\nContent-length: 12\r\n\r\nHello world\n";
 
 fn main() {
+    let mut threads = Vec::with_capacity(NUM_THREADS);
+
+    for _ in 0..NUM_THREADS {
+        threads.push(thread::spawn(run_server))
+    }
+
+    for handle in threads {
+        handle.join().unwrap();
+    }
+}
+
+fn run_server() {
     let mut runtime = Runtime::new(256).unwrap();
 
     runtime.spawn(async {
-        let listener = TcpListener::bind("[::1]:9000".parse().unwrap()).unwrap();
+        let listener = TcpListener::bind("[::1]:9000".parse().unwrap(), true).unwrap();
 
         let mut unordered = FuturesUnordered::new();
 
