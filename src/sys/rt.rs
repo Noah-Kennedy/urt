@@ -1,12 +1,12 @@
 use crate::sys::{Driver, Scheduler, Task};
 use crossbeam_channel::{Receiver, Sender};
 
-use crate::sys::waker::SysWaker;
+use crate::sys::waker::make_waker;
 use slab::Slab;
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::sync::Arc;
-use std::task::{Context, Waker};
+
+use std::task::Context;
 use std::{io, mem};
 
 pub(crate) struct Worker {
@@ -103,7 +103,7 @@ impl Worker {
 
         // try and poll a task if available
         if let Some(key) = guard.fetch_next_task_for_tick() {
-            let waker = self.waker(key);
+            let waker = make_waker(key);
 
             if let Some(task) = self.tasks.get_mut(key) {
                 mem::drop(guard);
@@ -124,12 +124,6 @@ impl Worker {
         } else {
             Tick::QueueEmpty
         }
-    }
-
-    fn waker(&self, key: usize) -> Waker {
-        let uwaker = SysWaker { key };
-
-        Waker::from(Arc::new(uwaker))
     }
 }
 

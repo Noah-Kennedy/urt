@@ -1,24 +1,26 @@
 use crate::sys::CONTEXT;
-use std::sync::Arc;
-use std::task::{RawWaker, Wake};
+use std::task::{RawWaker, RawWakerVTable, Waker};
 
-pub struct SysWaker {
-    key: usize,
+const VTABLE: RawWakerVTable = RawWakerVTable::new(make_raw_waker, wake, wake, drop_waker);
+
+pub(crate) fn make_waker(key: usize) -> Waker {
+    let key = key as *const ();
+    unsafe { Waker::from_raw(make_raw_waker(key)) }
 }
 
-impl SysWaker {
-    pub(crate) fn new(key: usize) -> Self {
-        Self { key }
-    }
+const fn make_raw_waker(key: *const ()) -> RawWaker {
+    RawWaker::new(key, &VTABLE)
 }
 
-fn make_waker(key: usize) -> RawWaker {}
+fn wake(key: *const ()) {
+    let key = key as usize;
 
-fn wake(key: usize) {
     CONTEXT.with(|x| {
         let borrow = x.borrow();
         let context = borrow.as_ref().unwrap();
 
-        context.scheduler.borrow_mut().wake(self.key);
+        context.scheduler.borrow_mut().wake(key);
     })
 }
+
+fn drop_waker(_: *const ()) {}
