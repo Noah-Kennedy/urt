@@ -1,24 +1,20 @@
 use crate::sys::{Driver, Scheduler, Task};
 use crossbeam_channel::{Receiver, Sender};
-use parking_lot::Mutex;
+
+use crate::sys::waker::make_waker;
 use slab::Slab;
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::sync::{Arc, Weak};
-use std::task::{Context, Wake, Waker};
+
+use std::task::Context;
 use std::{io, mem};
 
 pub(crate) struct Worker {
     tasks: Slab<Task>,
-    scheduler: Arc<Mutex<Scheduler>>,
+    scheduler: Rc<RefCell<Scheduler>>,
     new_tasks: Receiver<Task>,
     spawner: Spawner,
     driver: Rc<RefCell<Driver>>,
-}
-
-struct SysWaker {
-    key: usize,
-    scheduler: Weak<Mutex<Scheduler>>,
 }
 
 enum Tick {
@@ -35,7 +31,7 @@ pub(crate) struct Spawner {
 impl Worker {
     pub(crate) fn new(driver: Rc<RefCell<Driver>>) -> Self {
         let tasks = Slab::new();
-        let scheduler = Arc::new(Mutex::new(Scheduler::new()));
+        let scheduler = Rc::new(RefCell::new(Scheduler::new()));
 
         let (sender, new_tasks) = crossbeam_channel::unbounded();
 
@@ -56,6 +52,10 @@ impl Worker {
 
     pub(crate) fn spawner(&self) -> Spawner {
         self.spawner.clone()
+    }
+
+    pub(crate) fn scheduler(&self) -> Rc<RefCell<Scheduler>> {
+        self.scheduler.clone()
     }
 
     pub(crate) fn run(&mut self) -> io::Result<()> {
@@ -89,7 +89,7 @@ impl Worker {
     }
 
     fn tick(&mut self) -> Tick {
-        let mut guard = self.scheduler.lock();
+        let mut guard = self.scheduler.borrow_mut();
 
         // intake new tasks if present
         for _ in 0..64 {
@@ -103,7 +103,7 @@ impl Worker {
 
         // try and poll a task if available
         if let Some(key) = guard.fetch_next_task_for_tick() {
-            let waker = self.waker(key);
+            let waker = make_waker(key);
 
             if let Some(task) = self.tasks.get_mut(key) {
                 mem::drop(guard);
@@ -125,27 +125,10 @@ impl Worker {
             Tick::QueueEmpty
         }
     }
-
-    fn waker(&self, key: usize) -> Waker {
-        let scheduler = Arc::downgrade(&self.scheduler);
-        let uwaker = SysWaker { key, scheduler };
-
-        Waker::from(Arc::new(uwaker))
-    }
 }
 
 impl Spawner {
     pub(crate) fn spawn(&self, t: Task) {
         let _ = self.sender.send(t);
-    }
-}
-
-impl Wake for SysWaker {
-    fn wake(self: Arc<Self>) {
-        if let Some(unlocked) = self.scheduler.upgrade() {
-            let mut guard = unlocked.lock();
-
-            guard.wake(self.key);
-        }
     }
 }

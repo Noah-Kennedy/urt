@@ -49,6 +49,7 @@ impl Runtime {
             *guard = Some(ThreadContext {
                 spawner: self.worker.spawner(),
                 driver: self.worker.driver(),
+                scheduler: self.worker.scheduler(),
             });
         });
 
