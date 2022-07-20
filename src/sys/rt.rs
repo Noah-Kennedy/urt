@@ -1,4 +1,4 @@
-use crate::sys::{Driver, Scheduler, Task};
+use crate::sys::{Driver, Scheduler, Task, CONTEXT};
 use crossbeam_channel::{Receiver, Sender};
 use parking_lot::Mutex;
 use slab::Slab;
@@ -10,7 +10,7 @@ use std::{io, mem};
 
 pub(crate) struct Worker {
     tasks: Slab<Task>,
-    scheduler: Arc<Mutex<Scheduler>>,
+    scheduler: Rc<RefCell<Scheduler>>,
     new_tasks: Receiver<Task>,
     spawner: Spawner,
     driver: Rc<RefCell<Driver>>,
@@ -18,7 +18,6 @@ pub(crate) struct Worker {
 
 struct SysWaker {
     key: usize,
-    scheduler: Weak<Mutex<Scheduler>>,
 }
 
 enum Tick {
@@ -35,7 +34,7 @@ pub(crate) struct Spawner {
 impl Worker {
     pub(crate) fn new(driver: Rc<RefCell<Driver>>) -> Self {
         let tasks = Slab::new();
-        let scheduler = Arc::new(Mutex::new(Scheduler::new()));
+        let scheduler = Rc::new(RefCell::new(Scheduler::new()));
 
         let (sender, new_tasks) = crossbeam_channel::unbounded();
 
@@ -56,6 +55,10 @@ impl Worker {
 
     pub(crate) fn spawner(&self) -> Spawner {
         self.spawner.clone()
+    }
+
+    pub(crate) fn scheduler(&self) -> Rc<RefCell<Scheduler>> {
+        self.scheduler.clone()
     }
 
     pub(crate) fn run(&mut self) -> io::Result<()> {
@@ -89,7 +92,7 @@ impl Worker {
     }
 
     fn tick(&mut self) -> Tick {
-        let mut guard = self.scheduler.lock();
+        let mut guard = self.scheduler.borrow_mut();
 
         // intake new tasks if present
         for _ in 0..64 {
@@ -127,8 +130,7 @@ impl Worker {
     }
 
     fn waker(&self, key: usize) -> Waker {
-        let scheduler = Arc::downgrade(&self.scheduler);
-        let uwaker = SysWaker { key, scheduler };
+        let uwaker = SysWaker { key };
 
         Waker::from(Arc::new(uwaker))
     }
@@ -142,10 +144,11 @@ impl Spawner {
 
 impl Wake for SysWaker {
     fn wake(self: Arc<Self>) {
-        if let Some(unlocked) = self.scheduler.upgrade() {
-            let mut guard = unlocked.lock();
+        CONTEXT.with(|x| {
+            let borrow = x.borrow();
+            let context = borrow.as_ref().unwrap();
 
-            guard.wake(self.key);
-        }
+            context.scheduler.borrow_mut().wake(self.key);
+        })
     }
 }

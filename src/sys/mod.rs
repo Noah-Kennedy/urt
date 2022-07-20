@@ -17,6 +17,7 @@ thread_local!(pub(crate) static CONTEXT: RefCell<Option<ThreadContext>> = RefCel
 pub(crate) struct ThreadContext {
     pub(crate) spawner: Spawner,
     pub(crate) driver: Rc<RefCell<Driver>>,
+    pub(crate) scheduler: Rc<RefCell<Scheduler>>,
 }
 
 pub fn spawn<T, F>(fut: F) -> JoinHandle<T>
