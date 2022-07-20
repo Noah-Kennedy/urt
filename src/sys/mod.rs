@@ -12,6 +12,8 @@ mod rt;
 
 mod driver;
 
+mod waker;
+
 thread_local!(pub(crate) static CONTEXT: RefCell<Option<ThreadContext>> = RefCell::new(None));
 
 pub(crate) struct ThreadContext {

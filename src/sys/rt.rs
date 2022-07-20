@@ -1,11 +1,12 @@
 use crate::sys::{Driver, Scheduler, Task};
 use crossbeam_channel::{Receiver, Sender};
-use parking_lot::Mutex;
+
+use crate::sys::waker::SysWaker;
 use slab::Slab;
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::sync::{Arc, Weak};
-use std::task::{Context, Wake, Waker};
+use std::sync::Arc;
+use std::task::{Context, Waker};
 use std::{io, mem};
 
 pub(crate) struct Worker {
@@ -14,11 +15,6 @@ pub(crate) struct Worker {
     new_tasks: Receiver<Task>,
     spawner: Spawner,
     driver: Rc<RefCell<Driver>>,
-}
-
-struct SysWaker {
-    key: usize,
-    scheduler: Weak<Mutex<Scheduler>>,
 }
 
 enum Tick {
@@ -140,15 +136,5 @@ impl Worker {
 impl Spawner {
     pub(crate) fn spawn(&self, t: Task) {
         let _ = self.sender.send(t);
-    }
-}
-
-impl Wake for SysWaker {
-    fn wake(self: Arc<Self>) {
-        if let Some(unlocked) = self.scheduler.upgrade() {
-            let mut guard = unlocked.lock();
-
-            guard.wake(self.key);
-        }
     }
 }
