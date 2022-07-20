@@ -1,18 +1,17 @@
 use crate::sys::{Driver, Scheduler, Task};
-use crossbeam_channel::{Receiver, Sender};
 
 use crate::sys::waker::make_waker;
 use slab::Slab;
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use std::collections::VecDeque;
 use std::task::Context;
 use std::{io, mem};
 
 pub(crate) struct Worker {
     tasks: Slab<Task>,
     scheduler: Rc<RefCell<Scheduler>>,
-    new_tasks: Receiver<Task>,
     spawner: Spawner,
     driver: Rc<RefCell<Driver>>,
 }
@@ -25,7 +24,7 @@ enum Tick {
 
 #[derive(Clone)]
 pub(crate) struct Spawner {
-    sender: Sender<Task>,
+    sender: Rc<RefCell<VecDeque<Task>>>,
 }
 
 impl Worker {
@@ -33,14 +32,13 @@ impl Worker {
         let tasks = Slab::new();
         let scheduler = Rc::new(RefCell::new(Scheduler::new()));
 
-        let (sender, new_tasks) = crossbeam_channel::unbounded();
-
-        let spawner = Spawner { sender };
+        let spawner = Spawner {
+            sender: Rc::new(RefCell::new(VecDeque::with_capacity(4096))),
+        };
 
         Self {
             tasks,
             scheduler,
-            new_tasks,
             spawner,
             driver,
         }
@@ -92,13 +90,9 @@ impl Worker {
         let mut guard = self.scheduler.borrow_mut();
 
         // intake new tasks if present
-        for _ in 0..64 {
-            if let Ok(t) = self.new_tasks.try_recv() {
-                let key = self.tasks.insert(t);
-                guard.spawn(key);
-            } else {
-                break;
-            }
+        while let Some(t) = self.spawner.sender.borrow_mut().pop_front() {
+            let key = self.tasks.insert(t);
+            guard.spawn(key);
         }
 
         // try and poll a task if available
@@ -129,6 +123,6 @@ impl Worker {
 
 impl Spawner {
     pub(crate) fn spawn(&self, t: Task) {
-        let _ = self.sender.send(t);
+        let _ = self.sender.borrow_mut().push_back(t);
     }
 }
