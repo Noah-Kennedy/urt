@@ -1,13 +1,13 @@
-use std::thread;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 use io_uring::squeue::Flags;
+use std::thread;
 use tokio::io;
 use urt::io::prepare_batch;
 use urt::net::{TcpListener, TcpStream};
 use urt::rt::Runtime;
 
-const NUM_THREADS: usize = 1;
+const NUM_THREADS: usize = 2;
 const RESPONSE: &[u8] = b"HTTP/1.1 200 OK\r\nContent-length: 12\r\n\r\nHello world\n";
 
 fn main() {
@@ -25,7 +25,7 @@ fn main() {
 fn run_server() {
     let mut runtime = Runtime::new(256).unwrap();
 
-    runtime.spawn(async {
+    runtime.spawn(async move {
         let listener = TcpListener::bind("[::1]:9000".parse().unwrap(), true).unwrap();
 
         let mut unordered = FuturesUnordered::new();

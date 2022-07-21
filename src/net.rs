@@ -2,7 +2,7 @@ use crate::io::Unsubmitted;
 use crate::submit_op;
 use io_uring::cqueue;
 use socket2::{Domain, Protocol, SockAddr, Type};
-use std::{io};
+use std::io;
 use std::io::{Read, Write};
 use std::net::SocketAddr;
 use std::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd};
@@ -19,7 +19,8 @@ pub struct TcpStream {
 
 impl TcpListener {
     pub fn bind(addr: SocketAddr, reuse_port: bool) -> io::Result<Self> {
-        let sock = socket2::Socket::new(Domain::for_address(addr), Type::STREAM, Some(Protocol::TCP))?;
+        let sock =
+            socket2::Socket::new(Domain::for_address(addr), Type::STREAM, Some(Protocol::TCP))?;
 
         sock.set_reuse_port(reuse_port)?;
         sock.bind(&addr.into())?;
@@ -27,9 +28,7 @@ impl TcpListener {
 
         let inner = unsafe { std::net::TcpListener::from_raw_fd(sock.into_raw_fd()) };
 
-        Ok(Self {
-            inner,
-        })
+        Ok(Self { inner })
     }
 
     pub async fn accept(&self) -> io::Result<TcpStream> {
