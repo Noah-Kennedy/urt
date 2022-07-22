@@ -7,7 +7,7 @@ use urt::io::prepare_batch;
 use urt::net::{TcpListener, TcpStream};
 use urt::rt::Runtime;
 
-const NUM_THREADS: usize = 2;
+const NUM_THREADS: usize = 1;
 const RESPONSE: &[u8] = b"HTTP/1.1 200 OK\r\nContent-length: 12\r\n\r\nHello world\n";
 
 fn main() {
