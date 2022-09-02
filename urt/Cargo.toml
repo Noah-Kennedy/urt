@@ -11,6 +11,3 @@ tokio = { version = "1.18.2", features = ["sync"] }
 libc = "0.2.126"
 bit-set = "0.5.2"
 socket2 = { version = "0.4.4", features = ["all"] }
-
-[profile.release]
-debug = true
